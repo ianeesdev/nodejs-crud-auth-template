@@ -10,7 +10,7 @@ const mongoSanitize = require("express-mongo-sanitize");
 
 const connectDB = require("./config/connectDB");
 const { config } = require("./config/settings");
-const { errorHandler } = require("./middleware/errorMiddleware");
+const { errorMiddleware } = require("./middleware/error.middleware");
 
 // Database connection
 connectDB();
@@ -33,7 +33,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Body parser and URL encoding
+// Body parser, URL encoding and cookies setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -53,11 +53,11 @@ app.use(morgan("dev"));
 app.use("/assets", express.static(__dirname + "/uploads"));
 
 // Mount points
-app.use("/api/auth", require("./routes/userRoutes"));
-app.use("/api/goals", require("./routes/goalRoutes"));
+app.use("/api/auth", require("./routes/user.routes"));
+app.use("/api/goals", require("./routes/goal.routes"));
 
 // Custom error handler
-app.use(errorHandler);
+app.use(errorMiddleware);
 
 app.listen(config.port, () =>
   console.log(`Server running on port: ${config.port}`.cyan.italic.bold)

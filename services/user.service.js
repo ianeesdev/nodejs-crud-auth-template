@@ -2,21 +2,25 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 
-const User = require("../models/userModel");
-const OTP = require("../models/otpModel");
+const User = require("../models/user.model");
+const OTP = require("../models/otp.model");
 
 const { config } = require("../config/settings");
 
 class UserService {
   // Register service
-  async registerUser(fullName, email, password) {
+  async registerUser(fullName, email, password, role = "user") {
     if (!fullName || !email || !password) {
-      throw new Error("Please add all fields");
+      const error = new Error("Please add all fields");
+      error.status = 400;
+      throw error;
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      throw new Error("User already exists");
+      const error = new Error("User already exists");
+      error.status = 400;
+      throw error;
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -26,16 +30,21 @@ class UserService {
       fullName,
       email,
       password: hashedPassword,
+      role,
     }).save();
 
     if (user) {
       return {
         _id: user.id,
+        fullName: user.fullName,
         email: user.email,
+        role: user.role,
         token: this.generateToken(user._id),
       };
     } else {
-      throw new Error("Invalid user data");
+      const error = new Error("Invalid user data");
+      error.status = 400;
+      throw error;
     }
   }
 
@@ -44,7 +53,9 @@ class UserService {
     const user = await User.findOne({ email });
 
     if (!user) {
-      throw new Error("Email not found!");
+      const error = new Error("Email not found!");
+      error.status = 404;
+      throw error;
     }
 
     const passwordMatched = await bcrypt.compare(password, user.password);
@@ -57,10 +68,13 @@ class UserService {
         phoneNumber: user.phoneNumber,
         isLoggedIn: true,
         onboarded: user.onboarded,
+        role: user.role,
         token: this.generateToken(user._id),
       };
     } else {
-      throw new Error("Invalid password!");
+      const error = new Error("Invalid password!");
+      error.status = 401;
+      throw error;
     }
   }
 
@@ -69,7 +83,9 @@ class UserService {
     const user = await User.findOne({ email });
 
     if (!user) {
-      throw new Error("User not found!");
+      const error = new Error("User not found!");
+      error.status = 404;
+      throw error;
     }
 
     const otp = await this.generateOTP(user._id);
@@ -81,12 +97,14 @@ class UserService {
     };
   }
 
-  // verify otp sent from frontend with the server sent OTP
+  // Verify OTP service
   async verifyOTP(userId, otp) {
     const otpRecord = await OTP.findOne({ userId, otp });
 
     if (!otpRecord) {
-      throw new Error("Invalid OTP!");
+      const error = new Error("Invalid OTP!");
+      error.status = 400;
+      throw error;
     }
 
     const otpAge = Date.now() - new Date(otpRecord.createdAt).getTime();
@@ -94,7 +112,9 @@ class UserService {
 
     if (otpAge > otpValidityPeriod) {
       await OTP.deleteOne({ userId, otp });
-      throw new Error("OTP expired!");
+      const error = new Error("OTP expired!");
+      error.status = 400;
+      throw error;
     }
 
     await OTP.deleteOne({ userId, otp });
@@ -117,7 +137,9 @@ class UserService {
       );
 
       if (!user) {
-        throw new Error("User not found!");
+        const error = new Error("User not found!");
+        error.status = 404;
+        throw error;
       }
 
       return {
@@ -133,7 +155,9 @@ class UserService {
     const user = await User.findOne({ _id: id });
 
     if (!user) {
-      throw new Error("Invalid credentials");
+      const error = new Error("Invalid credentials");
+      error.status = 400;
+      throw error;
     }
     return {
       _id: user.id,
@@ -142,6 +166,7 @@ class UserService {
       phoneNumber: user.phoneNumber,
       isLoggedIn: true,
       onboarded: user.onboarded,
+      role: user.role,
       token: this.generateToken(user._id),
     };
   }
@@ -159,7 +184,9 @@ class UserService {
     const user = await User.findById(id);
 
     if (!user) {
-      throw new Error("User not found");
+      const error = new Error("User not found");
+      error.status = 404;
+      throw error;
     }
 
     if (currentPassword && newPassword) {
@@ -169,7 +196,9 @@ class UserService {
       );
 
       if (!passwordMatched) {
-        throw new Error("Current password is incorrect");
+        const error = new Error("Current password is incorrect");
+        error.status = 401;
+        throw error;
       }
 
       const salt = await bcrypt.genSalt(10);
@@ -190,8 +219,34 @@ class UserService {
       phoneNumber: user.phoneNumber,
       isLoggedIn: true,
       onboarded: user.onboarded,
+      role: user.role,
       token: this.generateToken(user._id),
     };
+  }
+
+  // Get all users service
+  async getAllUsers() {
+    const users = await User.find({});
+    return users.map((user) => ({
+      _id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+    }));
+  }
+
+  // Delete user service
+  async deleteUser(userId) {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      const error = new Error("User not found");
+      error.status = 404;
+      throw error;
+    }
+
+    await user.deleteOne();
   }
 
   // Generate OTP service
@@ -208,12 +263,12 @@ class UserService {
     return otpValue;
   }
 
-  // generate JWT token for authentication
+  // Generate JWT token
   generateToken(id) {
     return jwt.sign({ id }, config.jwtSecret, { expiresIn: "30d" });
   }
 
-  // send OTP code to user provided email
+  // Send OTP via email
   sendEmail(user, otp) {
     var transporter = nodemailer.createTransport({
       service: "gmail",

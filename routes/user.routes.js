@@ -1,9 +1,8 @@
-// routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
 
 const upload = require("../config/multerConfig");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, admin } = require("../middleware/auth.middleware");
 
 const {
   registerUser,
@@ -12,8 +11,10 @@ const {
   resetPassword,
   getUser,
   verifyOTP,
-  updateUserProfile
-} = require("../controllers/userController");
+  updateUserProfile,
+  getAllUsers,
+  deleteUser,
+} = require("../controllers/user.controller");
 
 router.post("/signup", registerUser);
 router.post("/login", loginUser);
@@ -22,5 +23,9 @@ router.post("/verifyOTP", protect, verifyOTP);
 router.post("/resetPassword", protect, resetPassword);
 router.get("/getUser", protect, getUser);
 router.put("/updateProfile", protect, upload.single("avatar"), updateUserProfile);
+
+// Admin routes
+router.get("/users", protect, admin, getAllUsers);
+router.delete("/users/:id", protect, admin, deleteUser);
 
 module.exports = router;

@@ -30,11 +30,17 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    refreshTokens: [{
+      token: String,
+      expiresAt: Date,
+    }],
   },
   {
     timestamps: true,
   }
 );
+
+userSchema.index({ email: 1 }, { unique: true });
 
 userSchema.pre('save', async function (next) {
   if (this.isModified('password') || this.isNew) {

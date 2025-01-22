@@ -6,123 +6,192 @@ const User = require("../models/user.model");
 const OTP = require("../models/otp.model");
 
 const { config } = require("../config/settings");
+const logger = require("../config/winston.config");
 
 class UserService {
+  // Generate JWT token
+  generateToken(id) {
+    return jwt.sign({ id }, config.jwtSecret, { expiresIn: "15m" });
+  }
+
+  // Generate Refresh Token
+  generateRefreshToken(id) {
+    return jwt.sign({ id }, config.refreshTokenSecret, { expiresIn: "7d" });
+  }
+
+  // Store Refresh Token in the database
+  async storeRefreshToken(userId, refreshToken) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    await User.findByIdAndUpdate(userId, {
+      $push: { refreshTokens: { token: refreshToken, expiresAt } },
+    });
+  }
+
+  // Revoke Refresh Token
+  async revokeRefreshToken(userId, refreshToken) {
+    await User.findByIdAndUpdate(userId, {
+      $pull: { refreshTokens: { token: refreshToken } },
+    });
+  }
+
   // Register service
   async registerUser(fullName, email, password, role = "user") {
-    if (!fullName || !email || !password) {
-      const error = new Error("Please add all fields");
-      error.status = 400;
-      throw error;
-    }
+    try {
+      if (!fullName || !email || !password) {
+        throw new Error("Please add all fields");
+      }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      const error = new Error("User already exists");
-      error.status = 400;
-      throw error;
-    }
+      const userExists = await User.findOne({ email });
+      if (userExists) {
+        throw new Error("User already exists");
+      }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
-    const user = await new User({
-      fullName,
-      email,
-      password: hashedPassword,
-      role,
-    }).save();
+      const user = await new User({
+        fullName,
+        email,
+        password: hashedPassword,
+        role,
+      }).save();
 
-    if (user) {
-      return {
-        _id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-        token: this.generateToken(user._id),
-      };
-    } else {
-      const error = new Error("Invalid user data");
-      error.status = 400;
+      if (user) {
+        const token = this.generateToken(user._id);
+        const refreshToken = this.generateRefreshToken(user._id);
+        await this.storeRefreshToken(user._id, refreshToken);
+
+        return {
+          _id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          token,
+          refreshToken,
+        };
+      } else {
+        throw new Error("Invalid user data");
+      }
+    } catch (error) {
+      logger.error(`Error in registerUser: ${error.message}`);
       throw error;
     }
   }
 
   // Login service
   async loginUser(email, password) {
-    const user = await User.findOne({ email });
+    try {
+      const user = await User.findOne({ email });
 
-    if (!user) {
-      const error = new Error("Email not found!");
-      error.status = 404;
+      if (!user) {
+        throw new Error("Email not found!");
+      }
+
+      const passwordMatched = await bcrypt.compare(password, user.password);
+
+      if (passwordMatched) {
+        const token = this.generateToken(user._id);
+        const refreshToken = this.generateRefreshToken(user._id);
+        await this.storeRefreshToken(user._id, refreshToken);
+
+        return {
+          _id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          isLoggedIn: true,
+          onboarded: user.onboarded,
+          role: user.role,
+          token,
+          refreshToken,
+        };
+      } else {
+        throw new Error("Invalid password!");
+      }
+    } catch (error) {
+      logger.error(`Error in loginUser: ${error.message}`);
       throw error;
     }
+  }
 
-    const passwordMatched = await bcrypt.compare(password, user.password);
+  // Refresh Token service
+  async refreshToken(refreshToken) {
+    try {
+      const decoded = jwt.verify(refreshToken, config.refreshTokenSecret);
+      const user = await User.findById(decoded.id);
 
-    if (passwordMatched) {
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Check if the refresh token is valid and not revoked
+      const validToken = user.refreshTokens.some(
+        (token) => token.token === refreshToken && token.expiresAt > new Date()
+      );
+
+      if (!validToken) {
+        throw new Error("Invalid or expired refresh token");
+      }
+
+      const token = this.generateToken(user._id);
       return {
-        _id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        isLoggedIn: true,
-        onboarded: user.onboarded,
-        role: user.role,
-        token: this.generateToken(user._id),
+        token,
       };
-    } else {
-      const error = new Error("Invalid password!");
-      error.status = 401;
-      throw error;
+    } catch (error) {
+      logger.error(`Error in refreshToken: ${error.message}`);
+      throw new Error("Invalid refresh token");
     }
   }
 
   // Forgot password service
   async forgotPassword(email) {
-    const user = await User.findOne({ email });
+    try {
+      const user = await User.findOne({ email });
 
-    if (!user) {
-      const error = new Error("User not found!");
-      error.status = 404;
+      if (!user) {
+        throw new Error("User not found!");
+      }
+
+      const otp = await this.generateOTP(user._id);
+      this.sendEmail(user, otp);
+
+      return {
+        _id: user.id,
+        token: this.generateToken(user._id),
+      };
+    } catch (error) {
+      logger.error(`Error in forgotPassword: ${error.message}`);
       throw error;
     }
-
-    const otp = await this.generateOTP(user._id);
-    this.sendEmail(user, otp);
-
-    return {
-      _id: user.id,
-      token: this.generateToken(user._id),
-    };
   }
 
   // Verify OTP service
   async verifyOTP(userId, otp) {
-    const otpRecord = await OTP.findOne({ userId, otp });
+    try {
+      const otpRecord = await OTP.findOne({ userId, otp });
 
-    if (!otpRecord) {
-      const error = new Error("Invalid OTP!");
-      error.status = 400;
-      throw error;
-    }
+      if (!otpRecord) {
+        throw new Error("Invalid OTP!");
+      }
 
-    const otpAge = Date.now() - new Date(otpRecord.createdAt).getTime();
-    const otpValidityPeriod = 10 * 60 * 1000; // 10 minutes in milliseconds
+      const otpAge = Date.now() - new Date(otpRecord.createdAt).getTime();
+      const otpValidityPeriod = 10 * 60 * 1000; // 10 minutes in milliseconds
 
-    if (otpAge > otpValidityPeriod) {
+      if (otpAge > otpValidityPeriod) {
+        await OTP.deleteOne({ userId, otp });
+        throw new Error("OTP expired!");
+      }
+
       await OTP.deleteOne({ userId, otp });
-      const error = new Error("OTP expired!");
-      error.status = 400;
+
+      return {
+        isVerified: true,
+        token: this.generateToken(userId),
+      };
+    } catch (error) {
+      logger.error(`Error in verifyOTP: ${error.message}`);
       throw error;
     }
-
-    await OTP.deleteOne({ userId, otp });
-
-    return {
-      isVerified: true,
-      token: this.generateToken(userId),
-    };
   }
 
   // Reset password service
@@ -137,38 +206,40 @@ class UserService {
       );
 
       if (!user) {
-        const error = new Error("User not found!");
-        error.status = 404;
-        throw error;
+        throw new Error("User not found!");
       }
 
       return {
         isUpdated: true,
       };
     } catch (error) {
+      logger.error(`Error in resetPassword: ${error.message}`);
       throw new Error("Invalid token");
     }
   }
 
   // Get User info service
   async getUser(id) {
-    const user = await User.findOne({ _id: id });
+    try {
+      const user = await User.findOne({ _id: id });
 
-    if (!user) {
-      const error = new Error("Invalid credentials");
-      error.status = 400;
+      if (!user) {
+        throw new Error("Invalid credentials");
+      }
+      return {
+        _id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        isLoggedIn: true,
+        onboarded: user.onboarded,
+        role: user.role,
+        token: this.generateToken(user._id),
+      };
+    } catch (error) {
+      logger.error(`Error in getUser: ${error.message}`);
       throw error;
     }
-    return {
-      _id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      isLoggedIn: true,
-      onboarded: user.onboarded,
-      role: user.role,
-      token: this.generateToken(user._id),
-    };
   }
 
   // Update user profile service
@@ -181,96 +252,105 @@ class UserService {
     currentPassword,
     newPassword
   ) {
-    const user = await User.findById(id);
+    try {
+      const user = await User.findById(id);
 
-    if (!user) {
-      const error = new Error("User not found");
-      error.status = 404;
-      throw error;
-    }
-
-    if (currentPassword && newPassword) {
-      const passwordMatched = await bcrypt.compare(
-        currentPassword,
-        user.password
-      );
-
-      if (!passwordMatched) {
-        const error = new Error("Current password is incorrect");
-        error.status = 401;
-        throw error;
+      if (!user) {
+        throw new Error("User not found");
       }
 
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(newPassword, salt);
+      if (currentPassword && newPassword) {
+        const passwordMatched = await bcrypt.compare(
+          currentPassword,
+          user.password
+        );
+
+        if (!passwordMatched) {
+          throw new Error("Current password is incorrect");
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+      }
+
+      user.avatar = avatar || user.avatar;
+      user.fullName = fullName || user.fullName;
+      user.email = email || user.email;
+      user.phoneNumber = phoneNumber || user.phoneNumber;
+
+      await user.save();
+
+      return {
+        _id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        isLoggedIn: true,
+        onboarded: user.onboarded,
+        role: user.role,
+        token: this.generateToken(user._id),
+      };
+    } catch (error) {
+      logger.error(`Error in updateUserProfile: ${error.message}`);
+      throw error;
     }
-
-    user.avatar = avatar || user.avatar;
-    user.fullName = fullName || user.fullName;
-    user.email = email || user.email;
-    user.phoneNumber = phoneNumber || user.phoneNumber;
-
-    await user.save();
-
-    return {
-      _id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      isLoggedIn: true,
-      onboarded: user.onboarded,
-      role: user.role,
-      token: this.generateToken(user._id),
-    };
   }
 
   // Get all users service
   async getAllUsers() {
-    const users = await User.find({});
-    return users.map((user) => ({
-      _id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      role: user.role,
-    }));
+    try {
+      const users = await User.find({});
+      return users.map((user) => ({
+        _id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+      }));
+    } catch (error) {
+      logger.error(`Error in getAllUsers: ${error.message}`);
+      throw error;
+    }
   }
 
   // Delete user service
   async deleteUser(userId) {
-    const user = await User.findById(userId);
+    try {
+      const user = await User.findById(userId);
 
-    if (!user) {
-      const error = new Error("User not found");
-      error.status = 404;
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      await user.deleteOne();
+    } catch (error) {
+      logger.error(`Error in deleteUser: ${error.message}`);
       throw error;
     }
-
-    await user.deleteOne();
   }
 
   // Generate OTP service
   async generateOTP(userId) {
-    const otpValue = Math.floor(1000 + Math.random() * 9000);
+    try {
+      const otpValue = Math.floor(1000 + Math.random() * 9000);
 
-    // Save OTP to the database
-    await new OTP({
-      userId: userId,
-      otp: otpValue,
-      createdAt: new Date(),
-    }).save();
+      // Save OTP to the database
+      await new OTP({
+        userId: userId,
+        otp: otpValue,
+        createdAt: new Date(),
+      }).save();
 
-    return otpValue;
-  }
-
-  // Generate JWT token
-  generateToken(id) {
-    return jwt.sign({ id }, config.jwtSecret, { expiresIn: "30d" });
+      return otpValue;
+    } catch (error) {
+      logger.error(`Error in generateOTP: ${error.message}`);
+      throw error;
+    }
   }
 
   // Send OTP via email
   sendEmail(user, otp) {
-    var transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: process.env.SOURCE_EMAIL,
@@ -278,7 +358,7 @@ class UserService {
       },
     });
 
-    var mailOptions = {
+    const mailOptions = {
       from: process.env.SOURCE_EMAIL,
       to: user.email,
       subject: "OTP Verification",
@@ -290,9 +370,9 @@ class UserService {
 
     transporter.sendMail(mailOptions, function (error, info) {
       if (error) {
-        console.log(error);
+        logger.error(`Error sending email: ${error.message}`);
       } else {
-        console.log("Email sent: " + info.response);
+        logger.info(`Email sent: ${info.response}`);
       }
     });
   }

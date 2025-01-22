@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const userService = require("../services/user.service");
+const ResponseModel = require("../utils/response.model");
 
 // @desc    Register new user
 // @route   POST /api/auth/signup
@@ -9,7 +10,8 @@ const registerUser = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.registerUser(fullName, email, password, role);
-    res.status(201).json(user);
+    const response = new ResponseModel(true, "User registered successfully", user);
+    res.status(201).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -23,7 +25,23 @@ const loginUser = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.loginUser(email, password);
-    res.status(200).json(user);
+    const response = new ResponseModel(true, "User logged in successfully", user);
+    res.status(200).json(response.toJSON());
+  } catch (error) {
+    next(error);
+  }
+});
+
+// @desc    Refresh Token
+// @route   POST /api/auth/refreshToken
+// @access  Public
+const refreshToken = asyncHandler(async (req, res, next) => {
+  const { refreshToken } = req.body;
+
+  try {
+    const token = await userService.refreshToken(refreshToken);
+    const response = new ResponseModel(true, "Token refreshed successfully", token);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -37,7 +55,8 @@ const forgotPassword = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.forgotPassword(email);
-    res.status(200).json(user);
+    const response = new ResponseModel(true, "OTP sent successfully", user);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -52,7 +71,8 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
 
   try {
     const result = await userService.verifyOTP(userId, otp);
-    res.status(200).json(result);
+    const response = new ResponseModel(true, "OTP verified successfully", result);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -67,7 +87,8 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 
   try {
     const result = await userService.resetPassword(userId, password);
-    res.status(200).json(result);
+    const response = new ResponseModel(true, "Password reset successfully", result);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -81,7 +102,8 @@ const getUser = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.getUser(userId);
-    res.status(200).json(user);
+    const response = new ResponseModel(true, "User fetched successfully", user);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -97,7 +119,8 @@ const updateUserProfile = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.updateUserProfile(userId, avatar, fullName, email, phoneNumber, currentPassword, newPassword);
-    res.status(200).json(user);
+    const response = new ResponseModel(true, "Profile updated successfully", user);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -109,7 +132,8 @@ const updateUserProfile = asyncHandler(async (req, res, next) => {
 const getAllUsers = asyncHandler(async (req, res, next) => {
   try {
     const users = await userService.getAllUsers();
-    res.status(200).json(users);
+    const response = new ResponseModel(true, "Users fetched successfully", users);
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -123,7 +147,8 @@ const deleteUser = asyncHandler(async (req, res, next) => {
 
   try {
     await userService.deleteUser(userId);
-    res.status(200).json({ message: "User deleted successfully" });
+    const response = new ResponseModel(true, "User deleted successfully");
+    res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
   }
@@ -132,6 +157,7 @@ const deleteUser = asyncHandler(async (req, res, next) => {
 module.exports = {
   registerUser,
   loginUser,
+  refreshToken,
   resetPassword,
   forgotPassword,
   verifyOTP,

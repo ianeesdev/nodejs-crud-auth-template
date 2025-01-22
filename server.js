@@ -8,9 +8,11 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 
+const { encryptionMiddleware, responseEncryptionMiddleware } = require("./middleware/encryption.middleware");
 const connectDB = require("./config/connectDB");
 const { config } = require("./config/settings");
 const { errorMiddleware } = require("./middleware/error.middleware");
+const logger = require("./config/winston.config");
 
 // Database connection
 connectDB();
@@ -25,17 +27,27 @@ app.use(cors({
 // Set security headers
 app.use(helmet());
 
-// Rate limiting for a specific IP address
-const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+// Rate limiting for specific endpoints
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login requests per windowMs
 });
 
-app.use(limiter);
+const refreshTokenLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // Limit each IP to 10 refresh token requests per windowMs
+});
+
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/refreshToken', refreshTokenLimiter);
 
 // Body parser, URL encoding and cookies setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Encryption Middleware (selective encryption)
+app.use(encryptionMiddleware);
+app.use(responseEncryptionMiddleware);
 
 // Data sanitization against XSS
 app.use(xss());
@@ -54,13 +66,12 @@ app.use("/assets", express.static(__dirname + "/uploads"));
 
 // Mount points
 app.use("/api/auth", require("./routes/user.routes"));
-app.use("/api/goals", require("./routes/goal.routes"));
 
 // Custom error handler
 app.use(errorMiddleware);
 
 app.listen(config.port, () =>
-  console.log(`Server running on port: ${config.port}`.cyan.italic.bold)
+  logger.info(`Server running on port: ${config.port}`)
 );
 
 module.exports = app;

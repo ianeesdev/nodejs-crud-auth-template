@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const upload = require("../config/multerConfig");
+const upload = require("../config/multer.config");
 const { protect, admin } = require("../middleware/auth.middleware");
 
 const {
@@ -14,6 +14,7 @@ const {
   updateUserProfile,
   getAllUsers,
   deleteUser,
+  refreshToken,
 } = require("../controllers/user.controller");
 
 router.post("/signup", registerUser);
@@ -23,6 +24,7 @@ router.post("/verifyOTP", protect, verifyOTP);
 router.post("/resetPassword", protect, resetPassword);
 router.get("/getUser", protect, getUser);
 router.put("/updateProfile", protect, upload.single("avatar"), updateUserProfile);
+router.post("/refreshToken", refreshToken);
 
 // Admin routes
 router.get("/users", protect, admin, getAllUsers);

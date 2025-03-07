@@ -1,5 +1,5 @@
 const config = {
-    dbUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/atiq",
+    dbUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/authTest",
     port: process.env.PORT || 4000,
     jwtSecret: process.env.JWT_SECRET || "ABC123",
     refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || "XYZ456",

@@ -41,13 +41,11 @@ const refreshTokenLimiter = rateLimit({
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/refreshToken', refreshTokenLimiter);
 
-// Body parser, URL encoding and cookies setup
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Encryption Middleware (selective encryption)
+// Body parser, URL encoding and cookies setup, Encryption Middleware (selective encryption)
 app.use(encryptionMiddleware);
+app.use(express.json());
 app.use(responseEncryptionMiddleware);
+app.use(express.urlencoded({ extended: true }));
 
 // Data sanitization against XSS
 app.use(xss());

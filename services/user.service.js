@@ -87,7 +87,7 @@ class UserService {
         throw new Error("Email not found!");
       }
 
-      const passwordMatched = await bcrypt.compare(password, user.password);
+      const passwordMatched = bcrypt.compare(password, user.password);
 
       if (passwordMatched) {
         const token = this.generateToken(user._id);

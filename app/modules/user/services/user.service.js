@@ -5,8 +5,8 @@ const nodemailer = require("nodemailer");
 const User = require("../models/user.model");
 const OTP = require("../models/otp.model");
 
-const { config } = require("../config/settings");
-const logger = require("../config/winston.config");
+const { config } = require("../../../config/settings");
+const logger = require("../../../config/winston.config");
 
 class UserService {
   // Generate JWT token

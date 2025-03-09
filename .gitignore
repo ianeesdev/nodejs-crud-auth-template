@@ -56,15 +56,6 @@ typings/
 
 # dotenv environment variables file
 .env
-
-# next.js build output
-.next/
-
-# Nuxt.js build / generate output
-.nuxt/
-
-# Gatsby files
-.cache/
 public/
 
 # vuepress build output

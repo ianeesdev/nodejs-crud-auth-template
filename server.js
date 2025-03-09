@@ -8,21 +8,32 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 
-const { encryptionMiddleware, responseEncryptionMiddleware } = require("./middleware/encryption.middleware");
-const connectDB = require("./config/connectDB");
-const { config } = require("./config/settings");
-const { errorMiddleware } = require("./middleware/error.middleware");
-const logger = require("./config/winston.config");
+const {
+  encryptionMiddleware,
+  responseEncryptionMiddleware,
+} = require("./app/middleware/encryption.middleware");
+const connectDB = require("./app/config/connectDB");
+const { config } = require("./app/config/settings");
+const { errorMiddleware } = require("./app/middleware/error.middleware");
+const logger = require("./app/config/winston.config");
 
 // Database connection
 connectDB();
 
 const app = express();
 
+// Body parser, URL encoding and cookies setup, Encryption Middleware (selective encryption)
+app.use(express.json());
+app.use(encryptionMiddleware);
+app.use(responseEncryptionMiddleware);
+app.use(express.urlencoded({ extended: true }));
+
 // CORS configuration
-app.use(cors({
-  origin: ['http://localhost:3000']
-}));
+app.use(
+  cors({
+    origin: ["http://localhost:3000"],
+  })
+);
 
 // Set security headers
 app.use(helmet());
@@ -38,14 +49,8 @@ const refreshTokenLimiter = rateLimit({
   max: 10, // Limit each IP to 10 refresh token requests per windowMs
 });
 
-app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth/refreshToken', refreshTokenLimiter);
-
-// Body parser, URL encoding and cookies setup, Encryption Middleware (selective encryption)
-app.use(encryptionMiddleware);
-app.use(express.json());
-app.use(responseEncryptionMiddleware);
-app.use(express.urlencoded({ extended: true }));
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/refreshToken", refreshTokenLimiter);
 
 // Data sanitization against XSS
 app.use(xss());
@@ -63,7 +68,7 @@ app.use(morgan("dev"));
 app.use("/assets", express.static(__dirname + "/uploads"));
 
 // Mount points
-app.use("/api/auth", require("./routes/user.routes"));
+app.use("/api/auth", require("./app/modules/user/routes/user.routes"));
 
 // Custom error handler
 app.use(errorMiddleware);

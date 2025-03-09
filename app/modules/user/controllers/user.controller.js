@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const userService = require("../services/user.service");
-const ResponseModel = require("../utils/response.model");
+const ResponseModel = require("../../../utils/response.model");
 
 // @desc    Register new user
 // @route   POST /api/auth/signup
@@ -9,8 +9,17 @@ const registerUser = asyncHandler(async (req, res, next) => {
   const { fullName, email, password, role } = req.body;
 
   try {
-    const user = await userService.registerUser(fullName, email, password, role);
-    const response = new ResponseModel(true, "User registered successfully", user);
+    const user = await userService.registerUser(
+      fullName,
+      email,
+      password,
+      role
+    );
+    const response = new ResponseModel(
+      true,
+      "User registered successfully",
+      user
+    );
     res.status(201).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -25,7 +34,11 @@ const loginUser = asyncHandler(async (req, res, next) => {
 
   try {
     const user = await userService.loginUser(email, password);
-    const response = new ResponseModel(true, "User logged in successfully", user);
+    const response = new ResponseModel(
+      true,
+      "User logged in successfully",
+      user
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -40,7 +53,11 @@ const refreshToken = asyncHandler(async (req, res, next) => {
 
   try {
     const token = await userService.refreshToken(refreshToken);
-    const response = new ResponseModel(true, "Token refreshed successfully", token);
+    const response = new ResponseModel(
+      true,
+      "Token refreshed successfully",
+      token
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -71,7 +88,11 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
 
   try {
     const result = await userService.verifyOTP(userId, otp);
-    const response = new ResponseModel(true, "OTP verified successfully", result);
+    const response = new ResponseModel(
+      true,
+      "OTP verified successfully",
+      result
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -87,7 +108,11 @@ const resetPassword = asyncHandler(async (req, res, next) => {
 
   try {
     const result = await userService.resetPassword(userId, password);
-    const response = new ResponseModel(true, "Password reset successfully", result);
+    const response = new ResponseModel(
+      true,
+      "Password reset successfully",
+      result
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -115,11 +140,24 @@ const getUser = asyncHandler(async (req, res, next) => {
 const updateUserProfile = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
   const avatar = req.file ? req.file.filename : null;
-  const { fullName, email, phoneNumber, currentPassword, newPassword } = req.body;
+  const { fullName, email, phoneNumber, currentPassword, newPassword } =
+    req.body;
 
   try {
-    const user = await userService.updateUserProfile(userId, avatar, fullName, email, phoneNumber, currentPassword, newPassword);
-    const response = new ResponseModel(true, "Profile updated successfully", user);
+    const user = await userService.updateUserProfile(
+      userId,
+      avatar,
+      fullName,
+      email,
+      phoneNumber,
+      currentPassword,
+      newPassword
+    );
+    const response = new ResponseModel(
+      true,
+      "Profile updated successfully",
+      user
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
@@ -132,7 +170,11 @@ const updateUserProfile = asyncHandler(async (req, res, next) => {
 const getAllUsers = asyncHandler(async (req, res, next) => {
   try {
     const users = await userService.getAllUsers();
-    const response = new ResponseModel(true, "Users fetched successfully", users);
+    const response = new ResponseModel(
+      true,
+      "Users fetched successfully",
+      users
+    );
     res.status(200).json(response.toJSON());
   } catch (error) {
     next(error);
